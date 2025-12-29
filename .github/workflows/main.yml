@@ -1,27 +1,44 @@
+
 name: Windows-VDS
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 360 # GitHub'ın izin verdiği maksimum süre (6 saat)
+
     steps:
-    - name: Ngrok Ayarla
+    - name: Ngrok Kuruluyor
       run: |
         Invoke-WebRequest https://bin.equinox.io/c/b34edqjn9KV/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
         Expand-Archive ngrok.zip
-    - name: Baglantiyi Baslat
+        
+    - name: Ngrok Kimlik Doğrulaması
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
       run: |
         .\ngrok\ngrok.exe authtoken $env:NGROK_AUTH_TOKEN
-        start-process .\ngrok\ngrok.exe -ArgumentList "tcp 3389"
-    - name: Baglanti Bilgilerini Al
+        
+    - name: Uzak Masaüstü Erişimi Aktif Ediliyor
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+        
+    - name: Tünel Başlatılıyor
+      run: |
+        Start-Process Powershell -ArgumentList "-NoExit -Command ".\ngrok\ngrok.exe tcp 3389""
+        
+    - name: Bağlantı Bilgilerini Göster
       run: |
         $response = Invoke-RestMethod -Uri http://localhost:4040/api/tunnels
         $addr = $response.tunnels[0].public_url
-        echo "Baglanti Adresi: $addr"
-    - name: Makineyi Acik Tut
-      run: |
-        $host.ui.RawUI.WindowTitle = "VDS Calisiyor..."
-        while($true) { Start-Sleep -Seconds 3600 }
+        Write-Host "VDS HAZIR!" -ForegroundColor Green
+        Write-Host "Bağlantı Adresi: $addr" -ForegroundColor Cyan
+        Write-Host "Kullanıcı Adı: runneradmin" -ForegroundColor Yellow
+        Write-Host "Şifre: GitHub hesabınızın şifresi değil, sistem tarafından otomatik atanır (genellikle şifresizdir)."
         
+    - name: VDS Canlı Tutuluyor
+      run: |
+        $host.ui.RawUI.WindowTitle = "VDS AKTİF - Kapatmayın"
+        while($true) { Start-Sleep -Seconds 3600 }
